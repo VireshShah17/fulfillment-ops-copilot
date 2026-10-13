@@ -1,0 +1,14 @@
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# Python build artifacts & metadata cache
+*.egg-info/
+__pycache__/
+*.pyc
+.pytest_cache/
+.cache/
+
+# Local sensitive environment configurations
+.env
