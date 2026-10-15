@@ -12,3 +12,4 @@ __pycache__/
 
 # Local sensitive environment configurations
 .env
+*.sqlite
