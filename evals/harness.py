@@ -12,7 +12,7 @@ from retrieval.client import GeminiClient
 
 # Setup lightweight logs
 logging.basicConfig(level = logging.INFO)
-logger = logging.getLogger("GeminiClient")
+logger = logging.getLogger("Harness Evaluation")
 
 def load_golden_set():
     with open("evals/datasets/golden_set.json", "r", encoding = "utf-8") as f:
