@@ -1,0 +1,12 @@
+[
+  {"query": "Can we cancel order ORD-5003?", "target_doc": "order_cancellation_reroute_runbook.md"},
+  {"query": "What do we do if a FedEx box is crushed and the product is destroyed?", "target_doc": "damaged_goods_protocol.md"},
+  {"query": "Lithium batteries UN3481 shipping rules", "target_doc": "carrier_exceptions_fedex_ups.md"},
+  {"query": "How is cycle count discrepancy handled if it is over $50?", "target_doc": "sop_inventory_allocation.md"},
+  {"query": "Customer wants to change address but order is already SHIPPED.", "target_doc": "order_cancellation_reroute_runbook.md"},
+  {"query": "What zone do full pallets go to?", "target_doc": "sop_inventory_allocation.md"},
+  {"query": "Tracking says WEATHER_DELAY for 52 hours. What is the SLA?", "target_doc": "carrier_exceptions_fedex_ups.md"},
+  {"query": "Item Q-HAZ-SPILL status in WMS, who do we call?", "target_doc": "damaged_goods_protocol.md"},
+  {"query": "Order ORD-1042 is ON_HOLD, what is the backorder threshold?", "target_doc": "sop_inventory_allocation.md"},
+  {"query": "Grade B scratch and dent inventory routing", "target_doc": "damaged_goods_protocol.md"}
+]

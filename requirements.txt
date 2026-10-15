@@ -1,0 +1,18 @@
+# Google Gemini SDK
+google-genai
+
+# Configuration & Validation
+pydantic
+pydantic-settings
+python-dotenv
+
+# Resilience & Caching
+tenacity
+diskcache
+
+# Vector Math & Retrieval
+numpy
+rank-bm25
+
+# Testing
+pytest
