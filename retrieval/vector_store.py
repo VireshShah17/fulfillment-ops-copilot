@@ -4,6 +4,7 @@ import numpy as np
 from typing import List, Dict, Any
 from pydantic import BaseModel, Field
 from retrieval.chunking import Chunk
+from rank_bm25 import BM25Okapi
 
 
 class SearchResult(BaseModel):
@@ -15,18 +16,20 @@ class SearchResult(BaseModel):
     score: float
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-
 class VectorStore:
-    """
-        Lightweight in-memory vector store persisting data on-disk as JSON.
-    """
     def __init__(self, storage_path: str = ".cache/vector_store.json"):
         self.storage_path = storage_path
-        # Ensure the directory tree wrapper exists safely
-        os.makedirs(os.path.dirname(self.storage_path), exist_ok=True)
+        os.makedirs(os.path.dirname(self.storage_path), exist_ok = True)
         self.chunks: Dict[str, Dict[str, Any]] = {}
         self.embeddings: Dict[str, List[float]] = {}
+        
+        # Sparse Index State
+        self.bm25_corpus = [] 
+        self.chunk_ids_list = [] 
+        self.bm25_index = None
+        
         self._load_store()
+        self._build_bm25()
 
 
     def _load_store(self):
@@ -52,6 +55,20 @@ class VectorStore:
             json.dump({"chunks": self.chunks, "embeddings": self.embeddings}, f, indent = 2)
 
 
+    def _tokenize(self, text: str) -> List[str]:
+        # Lightweight tokenization for BM25
+        return text.lower().replace('\n', ' ').split()
+
+
+    def _build_bm25(self):
+        if not self.chunks:
+            return
+        
+        self.chunk_ids_list = list(self.chunks.keys())
+        self.bm25_corpus = [self._tokenize(self.chunks[cid]["text"]) for cid in self.chunk_ids_list]
+        self.bm25_index = BM25Okapi(self.bm25_corpus)
+
+
     def add_documents(self, chunks: List[Chunk], embeddings: List[List[float]]):
         """
             Appends new structured fragments and vectors mapping data points into store.
@@ -68,43 +85,76 @@ class VectorStore:
             self.embeddings[chunk.chunk_id] = embedding
 
         self._save_store()
+        self._build_bm25() # Rebuild index when data is added
 
 
-    def similarity_search(self, query_embedding: List[float], top_k: int = 3) -> List[SearchResult]:
-        """
-            Performs cosine math operations to extract top matched context paths.
-        """
+    def dense_search(self, query_embedding: List[float], top_k: int = 10) -> List[SearchResult]:
         if not self.embeddings:
             return []
-
-        # Convert mappings safely into high-speed numpy data frames
+            
         chunk_ids = list(self.embeddings.keys())
         matrix = np.array([self.embeddings[cid] for cid in chunk_ids])
         q_vec = np.array(query_embedding)
 
-        # Vectorized Cosine Similarity Math Execution
         dot_product = np.dot(matrix, q_vec)
-        matrix_norms = np.linalg.norm(matrix, axis=1)
-        q_norm = np.linalg.norm(q_vec)
-
-        # Zero division error prevention buffer edge-case
-        norms = matrix_norms * q_norm
+        norms = np.linalg.norm(matrix, axis=1) * np.linalg.norm(q_vec)
         norms[norms == 0] = 1e-9
-        
         scores = dot_product / norms
 
-        # Get top matching indices sorted in descending order
         top_indices = np.argsort(scores)[::-1][:top_k]
 
-        results = []
-        for idx in top_indices:
-            cid = chunk_ids[idx]
-            chunk_data = self.chunks[cid]
-            results.append(SearchResult(
-                chunk_id = cid,
-                text = chunk_data["text"],
+        return [
+            SearchResult(
+                chunk_id = chunk_ids[idx],
+                text = self.chunks[chunk_ids[idx]]["text"],
                 score = float(scores[idx]),
-                metadata = chunk_data["metadata"]
-            ))
+                metadata = self.chunks[chunk_ids[idx]]["metadata"]
+            ) for idx in top_indices
+        ]
 
-        return results
+
+    def sparse_search(self, query: str, top_k: int = 10) -> List[SearchResult]:
+
+        if not self.bm25_index:
+            return []
+            
+        tokenized_query = self._tokenize(query)
+        scores = self.bm25_index.get_scores(tokenized_query)
+        top_indices = np.argsort(scores)[::-1][:top_k]
+        
+        return [
+            SearchResult(
+                chunk_id = self.chunk_ids_list[idx],
+                text = self.chunks[self.chunk_ids_list[idx]]["text"],
+                score = float(scores[idx]),
+                metadata = self.chunks[self.chunk_ids_list[idx]]["metadata"]
+            ) for idx in top_indices if scores[idx] > 0
+        ]
+
+
+    def hybrid_search(self, query: str, query_embedding: List[float], top_k: int = 3, rrf_k: int = 60) -> List[SearchResult]:
+        # Pull larger pools to fuse
+        dense_results = self.dense_search(query_embedding, top_k = 10)
+        sparse_results = self.sparse_search(query, top_k = 10)
+
+        rrf_scores = {}
+        
+        # Calculate Reciprocal Rank Fusion for Dense
+        for rank, res in enumerate(dense_results):
+            rrf_scores[res.chunk_id] = rrf_scores.get(res.chunk_id, 0.0) + (1.0 / (rrf_k + rank + 1))
+            
+        # Calculate Reciprocal Rank Fusion for Sparse
+        for rank, res in enumerate(sparse_results):
+            rrf_scores[res.chunk_id] = rrf_scores.get(res.chunk_id, 0.0) + (1.0 / (rrf_k + rank + 1))
+        
+        # Sort by combined RRF score descending
+        sorted_chunks = sorted(rrf_scores.items(), key = lambda x: x[1], reverse = True)[:top_k]
+        
+        return [
+            SearchResult(
+                chunk_id = cid,
+                text = self.chunks[cid]["text"],
+                score = score,
+                metadata = self.chunks[cid]["metadata"]
+            ) for cid, score in sorted_chunks
+        ]

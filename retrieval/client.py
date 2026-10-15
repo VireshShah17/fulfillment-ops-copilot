@@ -97,35 +97,35 @@ class GeminiClient:
         wait = wait_random_exponential(multiplier = 1, min = 2, max = 10),
         retry = retry_if_exception_type((errors.APIError, ConnectionError))
     )
-    def _execute_embed_text(self, texts: List[str]) -> List[List[float]]:
+    def _execute_single_embed(self, text: str) -> List[float]:
         """
-            Internal embedding generation executor wrapped with tenacity retry logic.
+            Internal single-text embedding executor wrapped with tenacity retry logic.
         """
-        logger.info(f"Dispatching API call for embeddings vector map using model: {self.settings.embedding_model}")
-        
         response = self.client.models.embed_content(
             model = self.settings.embedding_model,
-            contents = texts
+            contents = text
         )
-        
-        # Parse output array securely based on the official SDK structure
-        return [embedding.values for embedding in response.embeddings]
+        return response.embeddings[0].values
 
-
+    
     def embed_text(self, texts: List[str]) -> List[List[float]]:
         """
-            Exposes vector embeddings generations backed by an efficient on-disk caching layer.
+            Exposes vector embeddings generations backed by an efficient per-chunk on-disk caching layer.
         """
-        # Create a deterministic lookup key for the batch array inputs
-        cache_key = f"embed:{hashlib.sha256(json.dumps(texts).encode()).hexdigest()}"
-        
-        cached_res = api_cache.get(cache_key)
-        
-        if cached_res is not None:
-            logger.info("Cache hit: Returning vector array matrix from disk storage.")
-            return cached_res
-
-        result = self._execute_embed_text(texts)
-        api_cache.set(cache_key, result, expire = 86400) # Cached for 24 hours
-        
-        return result
+        results = []
+        for text in texts:
+            # Create a deterministic lookup key for this specific text chunk
+            raw_embed = f"{self.settings.embedding_model}:{text}"
+            cache_key = f"embed:{hashlib.sha256(raw_embed.encode()).hexdigest()}"
+            
+            cached_res = api_cache.get(cache_key)
+            
+            if cached_res is not None:
+                results.append(cached_res)
+            else:
+                logger.info(f"Cache miss: Embedding new chunk via API...")
+                vector = self._execute_single_embed(text)
+                api_cache.set(cache_key, vector, expire = 86400) # Cached for 24 hours
+                results.append(vector)
+                
+        return results
