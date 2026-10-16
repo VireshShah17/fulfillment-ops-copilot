@@ -41,7 +41,7 @@ def test_baseline_retrieval_pipeline_integrity():
             
             # 4. Fire target math validation query structure assertion block
             query_vector = [1.0] + [0.0] * 767
-            top_matches = store.similarity_search(query_vector, top_k=1)
+            top_matches = store.dense_search(query_vector, top_k = 1)
             
             assert len(top_matches) == 1, "VectorStore similarity search mapping lookup failed."
             assert top_matches[0].metadata["source"] == "carrier_exceptions_fedex_ups.md", \

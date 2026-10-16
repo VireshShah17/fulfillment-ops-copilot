@@ -21,7 +21,7 @@ def test_vector_store_add_and_search():
 
     # Query matching vector space closest to chunk1 vector pattern direction
     query_vector = [0.9, 0.1, 0.0]
-    results = store.similarity_search(query_vector, top_k=1)
+    results = store.dense_search(query_vector, top_k = 1)
 
     assert len(results) == 1
     assert results[0].chunk_id == "doc1"
