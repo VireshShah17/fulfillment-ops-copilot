@@ -61,7 +61,10 @@ def check_guardrail(state: AgentState) -> str:
     last_message = state["messages"][-1].content.lower()
     
     # Lightweight keyword check for ops context
-    ops_keywords = ["order", "sku", "inventory", "shipment", "tracking", "warehouse", "delay", "stock", "policy", "carrier"]
+    ops_keywords = [
+        "order", "ord", "status", "sku", "inventory", "shipment", 
+        "tracking", "warehouse", "delay", "stock", "policy", "carrier"
+    ]
     
     if any(word in last_message for word in ops_keywords):
         return "valid"
